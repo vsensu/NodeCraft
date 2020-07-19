@@ -8,9 +8,13 @@
 #include <QtWidgets/QWidget>
 #include <QPainter>
 #include <QTimer>
+#include <QMouseEvent>
+
+#include <stack>
 
 #include "entt.hpp"
 #include "components.h"
+#include "commands.h"
 
 class RenderWidget : public QWidget
 {
@@ -53,9 +57,43 @@ protected:
         });
     }
 
+    void mouseDoubleClickEvent(QMouseEvent *event) override
+    {
+        auto cursor_pos = event->pos();
+        auto *cmd = new Cmd_CreateEntity(*registry);
+        cmd->execute();
+        auto entity = cmd->entity();
+
+        auto *add_pos_comp_cmd = new Cmd_AddComponent(*registry, entity, position{static_cast<float>(cursor_pos.x()), static_cast<float>(cursor_pos.y())});
+        add_pos_comp_cmd->execute();
+
+        auto *add_rectnode_comp_cmd = new Cmd_AddComponent(*registry, entity, RectNode{200, 200, rand()%256, rand()%256, rand()%256});
+        add_rectnode_comp_cmd->execute();
+
+        auto *cmds = new CompressedCommands;
+        cmds->push(cmd);
+        cmds->push(add_pos_comp_cmd);
+        cmds->push(add_rectnode_comp_cmd);
+        cmds_.push(cmds);
+    }
+
+    void keyPressEvent(QKeyEvent *event) override
+    {
+        if(event->key() == Qt::Key_Backspace)
+        {
+            auto *cmd = cmds_.top();
+            if(cmd)
+            {
+                cmd->undo();
+                cmds_.pop();
+            }
+        }
+    }
+
 private:
     entt::registry *registry;
     QTimer render_timer_;
+    std::stack<Command*> cmds_;
 };
 
 #endif //NODECRAFT_RENDERWIDGET_H
