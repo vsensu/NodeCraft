@@ -24,4 +24,8 @@ struct FPS {
     std::uint64_t value;
 };
 
+struct Screen {
+    int w, h;
+};
+
 #endif //NODECRAFT_COMPONENTS_H

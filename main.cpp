@@ -11,15 +11,37 @@
 #include "components.h"
 
 double g_update_freq = 16.666;
+int g_init_w = 600;
+int g_init_h = 400;
 
-void update_pos(std::uint64_t dt, entt::registry &registry) {
-    registry.view<position, velocity>().each([dt](auto &pos, auto &vel) {
+void update_pos(std::uint64_t dt, entt::registry &registry)
+{
+    registry.view<position, velocity>().each([dt](auto &pos, auto &vel)
+    {
         // gets all the components of the view at once ...
 
         pos.x += vel.dx * dt;
         pos.y += vel.dy * dt;
 
         // ...
+    });
+}
+
+void update_collision(entt::registry &registry)
+{
+    Screen screen;
+    registry.view<Screen>().each([&screen](auto &sc){
+        screen = sc;
+    });
+    registry.view<position, velocity, RectNode>().each([&screen](auto &pos, auto &vel, auto &node)
+    {
+        if(pos.x >= screen.w - node.w || pos.x <= 0) vel.dx = -vel.dx;
+        if(pos.y <= 0 || pos.y >= screen.h - node.h) vel.dy = -vel.dy;
+
+        if(pos.x < 0) pos.x = 0;
+        if(pos.x > screen.w - node.w) pos.x = screen.w - node.w;
+        if(pos.y < 0) pos.y = 0;
+        if(pos.y > screen.h - node.h) pos.y = screen.h - node.h;
     });
 }
 
@@ -48,8 +70,13 @@ void update_ecs()
         registry.emplace<RectNode>(entity, 100, 100, rand()%256, rand()%256, rand()%256);
     }
 
-    auto entity = registry.create();
-    registry.emplace<FPS>(entity, 0u);
+    // fps singleton component
+    auto fps_entity = registry.create();
+    registry.emplace<FPS>(fps_entity, 0u);
+
+    // screen size singleton component
+    auto screen_entity = registry.create();
+    registry.emplace<Screen>(screen_entity, g_init_w, g_init_h);
 
     // ecs循环
     auto previous = std::chrono::steady_clock::now();
@@ -66,6 +93,7 @@ void update_ecs()
         {
             std::cout << "elapsed time: " << lag << "ms\n";
             update_pos(g_update_freq, registry);
+            update_collision(registry);
             update_fps(1000.0/lag, registry);
             lag -= g_update_freq;
         }
@@ -80,6 +108,7 @@ int main(int argc, char **argv)
     QApplication app(argc, argv);
     RenderWidget w;
     w.SetRegistry(registry);
+    w.resize(g_init_w, g_init_h);
     w.show();
 
     std::thread t(update_ecs);

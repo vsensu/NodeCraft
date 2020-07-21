@@ -30,6 +30,15 @@ public:
     }
 
 protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        auto sz = event->size();
+        registry->view<Screen>().each([&sz](auto &screen) {
+            screen.w = sz.width();
+            screen.h = sz.height();
+        });
+    }
+
     void paintEvent(QPaintEvent *event) override
     {
         QPainter painter(this);
@@ -81,12 +90,60 @@ protected:
     {
         if(event->key() == Qt::Key_Backspace)
         {
-            auto *cmd = cmds_.top();
-            if(cmd)
+            // undo
+            if(cmds_.size() > 0)
             {
-                cmd->undo();
-                cmds_.pop();
+                auto &cmd = cmds_.top();
+                if(cmd)
+                {
+                    cmd->undo();
+                    cmds_.pop();
+                }
             }
+        }
+    }
+
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if(event->button() == Qt::LeftButton)
+        {
+            mouse_pressed_ = true;
+            pressed_point_ = event->pos();
+            this->selected_node_ = nullptr;
+
+            registry->view<position, RectNode>().each([this](auto &pos, auto &rect_node) {
+                if(this->selected_node_) return;
+                // gets all the components of the view at once ...
+                QRectF rect(QPointF(pos.x, pos.y), QSizeF(rect_node.w, rect_node.h));
+                if(rect.contains(this->pressed_point_))
+                {
+                    this->selected_node_ = &pos;
+                }
+            });
+
+            last_cursor_pos_ = pressed_point_;
+        }
+    }
+
+    void mouseMoveEvent(QMouseEvent *event) override
+    {
+        if (mouse_pressed_) {
+            auto delta_pos = event->pos() - last_cursor_pos_;
+
+            if (selected_node_) {
+                selected_node_->x += delta_pos.x();
+                selected_node_->y += delta_pos.y();
+            }
+        }
+
+        last_cursor_pos_ = event->pos();
+    }
+
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        if(event->button() == Qt::LeftButton)
+        {
+            mouse_pressed_ = false;
         }
     }
 
@@ -94,6 +151,10 @@ private:
     entt::registry *registry;
     QTimer render_timer_;
     std::stack<Command*> cmds_;
+    bool mouse_pressed_;
+    QPoint pressed_point_;
+    QPoint last_cursor_pos_;
+    position *selected_node_;
 };
 
 #endif //NODECRAFT_RENDERWIDGET_H
